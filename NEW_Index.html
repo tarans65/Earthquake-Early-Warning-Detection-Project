@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Kathmandu GeoLab Live Database Filter</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body class="bg-light">
+    <div class="container py-4">
+        <h1 class="mb-4 text-center">🌍 Kathmandu GeoLab Live Database Filter 🌍</h1>
+
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <h5>Live Sensor Data</h5>
+                <div id="data" class="border rounded p-3 bg-white">Waiting for data...</div>
+            </div>
+
+            <div class="col-md-6">
+                <h5>Download Filtered Data</h5>
+                <form id="downloadForm" class="row g-3">
+                    <div class="col-6">
+                        <label for="start" class="form-label">Start Date/Time</label>
+                        <input type="datetime-local" id="start" name="start" class="form-control" required>
+                    </div>
+                    <div class="col-6">
+                        <label for="end" class="form-label">End Date/Time</label>
+                        <input type="datetime-local" id="end" name="end" class="form-control" required>
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">Download CSV</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <h5 class="mb-3">Filtered Data Graph</h5>
+        <div id="plot" style="height: 400px;" class="bg-white border rounded"></div>
+    </div>
+
+    <script>
+        // SSE: live sensor data
+        const eventSource = new EventSource("/stream");
+        let lastUpdate = Date.now();
+        eventSource.onmessage = function(event) {
+            document.getElementById("data").innerHTML = "Sensor Data: " + event.data;
+            lastUpdate = Date.now();
+        };
+        setInterval(() => {
+            if (Date.now() - lastUpdate > 10000) {
+                document.getElementById("data").innerHTML = "No new data received in the last 10 seconds.";
+            }
+        }, 5000);
+
+        // Download form submission
+        document.getElementById("downloadForm").addEventListener("submit", function(e) {
+            e.preventDefault();
+            const start = document.getElementById("start").value;
+            const end = document.getElementById("end").value;
+            window.location.href = `/download?start=${start}&end=${end}`;
+            fetchPlotData(start, end);
+        });
+
+function fetchPlotData(start, end, axis = 'X') {
+    fetch(`/filtered-data?start=${start}&end=${end}&axis=${axis}`)
+        .then(res => res.json())
+        .then(data => {
+            console.log(`Plotting ${data.count} data points for ${data.axis} axis`);
+            
+            const trace = {
+                x: data.timestamps,
+                y: data.values,
+                mode: "lines+markers",
+                type: "scatter",
+                name: `${data.axis} Axis`,
+                line: {
+                    width: 2
+                },
+                marker: {
+                    size: 4
+                }
+            };
+            
+            const layout = {
+                xaxis: { 
+                    title: "Time",
+                    type: "date"
+                },
+                yaxis: { 
+                    title: `${data.axis} Axis Value`
+                },
+                title: `Geophone Data - ${data.axis} Axis (${data.count} points)`,
+                showlegend: true
+            };
+            
+            Plotly.newPlot("plot", [trace], layout, { responsive: true });
+        })
+        .catch(error => {
+            console.error('Error fetching plot data:', error);
+        });
+}
+    </script>
+</body>
+</html>
+
